@@ -720,49 +720,130 @@ function App() {
   // PROFILE PHOTO
   // ---------------------------------
 
-  function changePhoto(event) {
-    const file =
-      event.target.files?.[0]
+  async function changePhoto(event) {
+  
+  console.log('CHANGE PHOTO FUNCTION FIRED')
+  console.log('SELECTED FILE:', event.target.files?.[0])
+  const file = event.target.files?.[0]
 
-    if (!file) return
 
-    if (
-      !file.type.startsWith('image/')
-    ) {
-      setNotice(
-        'Please choose an image file'
-      )
+  if (!file) return
+  console.log('FILE SELECTED:', file.name, file.size)
+  if (!file.type.startsWith('image/')) {
+    setNotice('Please choose an image file')
 
-      setTimeout(
-        () => setNotice(''),
-        1400
-      )
+    setTimeout(() => setNotice(''), 1400)
 
-      return
-    }
-
-    const reader = new FileReader()
-
-    reader.onload = () => {
-      setMyProfile(
-        (profile) => ({
-          ...profile,
-          photo: reader.result
-        })
-      )
-
-      setNotice(
-        'Profile photo updated'
-      )
-
-      setTimeout(
-        () => setNotice(''),
-        1400
-      )
-    }
-
-    reader.readAsDataURL(file)
+    return
   }
+
+  if (file.size > 5 * 1024 * 1024) {
+    setNotice('Profile picture must be smaller than 5 MB')
+
+    setTimeout(() => setNotice(''), 1400)
+
+    return
+  }
+
+  try {
+    setNotice('Uploading profile photo...')
+
+    const extension =
+      file.name.split('.').pop()?.toLowerCase() || 'jpg'
+
+    const fileName =
+      `${crypto.randomUUID()}.${extension}`
+
+    const photoPath =
+      `${session.user.id}/${fileName}`
+
+    // -----------------------------
+    // UPLOAD NEW PROFILE PICTURE
+    // -----------------------------
+    console.log('STARTING UPLOAD:', photoPath)
+    const {
+      error: uploadError
+    } = await supabase.storage
+      .from('profile-pictures')
+      .upload(
+        photoPath,
+        file,
+        {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type
+        }
+      )
+        console.log('UPLOAD RESULT:', uploadError)
+
+    if (uploadError) {
+      throw uploadError
+    }
+    // -----------------------------
+    // UPDATE PROFILE DATABASE
+    // -----------------------------
+
+    const {
+      data: updatedProfile,
+      error: updateError
+    } = await supabase
+      .from('profiles')
+      .update({
+        photo_path: photoPath
+      })
+      .eq('id', session.user.id)
+      .select()
+      .single()
+
+    if (updateError) {
+      // Remove the newly uploaded image
+      // if the database update fails.
+      await supabase.storage
+        .from('profile-pictures')
+        .remove([photoPath])
+
+      throw updateError
+    }
+
+    // -----------------------------
+    // UPDATE REACT STATE
+    // -----------------------------
+
+    setProfile(updatedProfile)
+
+    const {
+      data: publicUrlData
+    } = supabase.storage
+      .from('profile-pictures')
+      .getPublicUrl(photoPath)
+
+    setMyProfile((current) => ({
+      ...current,
+      photo:
+        `${publicUrlData.publicUrl}?t=${Date.now()}`
+    }))
+
+    setNotice('Profile photo updated')
+
+    setTimeout(() => setNotice(''), 1400)
+
+  } catch (error) {
+    console.error(
+      'Profile photo update failed:',
+      error
+    )
+
+    setNotice(
+      error?.message ||
+      'Could not update profile photo. Please try again.'
+    )
+
+    setTimeout(() => setNotice(''), 2000)
+  } finally {
+    // Allows selecting the same file again
+    event.target.value = ''
+  }
+}
 
   // ---------------------------------
   // APP
