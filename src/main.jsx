@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import VerificationScreen from './components/VerificationScreen.jsx'
 import AuthForm from './components/AuthForm.jsx'
 import ProfileSetup from './components/ProfileSetup.jsx'
+import AuraLanding from './components/AuraLanding.jsx'
 import {
   Flame,
   Trophy,
@@ -55,6 +56,7 @@ function App() {
 
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [showEmailAuth, setShowEmailAuth] = useState(false)
 
   // ---------------------------------
   // VERIFICATION STATE
@@ -537,12 +539,23 @@ function App() {
   // ---------------------------------
 
   if (!session) {
+
+  if (showEmailAuth) {
     return (
       <AuthForm
         onAuthenticated={() => {}}
       />
     )
   }
+
+  return (
+    <AuraLanding
+      onEmail={() => {
+        setShowEmailAuth(true)
+      }}
+    />
+  )
+}
 
   // ---------------------------------
   // VERIFICATION LOADING
